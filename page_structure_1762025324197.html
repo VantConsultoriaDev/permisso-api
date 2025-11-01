@@ -1,0 +1,157 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html><head><script language="javascript">
+function btnActionClick(codigo){
+	if (document.getElementById('Formulario').txtPlaca.value == '' && codigo == 'PLACA'){
+		alert("Informe a placa do veículo para realizar a consulta.");
+		return false;
+	}
+	document.getElementById('Formulario').action="conLocalizaVeiculo.asp"
+	document.getElementById('Formulario').submit();
+}
+function funLimpaCampos(){
+	document.getElementById('Formulario').txtPlaca.value = '';
+	document.getElementById('Formulario').txtPlaca.focus();
+}
+function SoLetraNumero(){
+var c = event.keyCode;
+//javascript:txtCnpj.value='';txtRazaoSocial.value='';cboPais.value='';if(event.keyCode=='13') {btnActionClick('PLACA')}
+//Verifica se é um a letra ou se é número de 0 a 9
+//	if ( ((c >= "a") && (c <= "z")) || ((c >= "A") && (c <= "Z")) || ((c >= "0") && (c <= "9")) ) {
+
+	if ( ((c >= 97) && (c <= 122)) || ((c >= 65) && (c <= 90)) || ((c >= 48) && (c <= 57)) ) {
+	return true; 	}
+
+	//liberado a digitação do ponto, por conta das placas da Bolívia (Eduardo Agassi em 20/12/2005)
+	if (c = 46){ return true };
+
+	if(c=='13')
+	{	btnActionClick('PLACA');
+		return true;
+		}
+	event.keyCode = 0;
+}
+function valida_form(frm){
+
+}
+</script>
+<script>
+function OpenModalWindow(popupsite,windowname,wndHeight,wndWidth) {
+	var X = 0;
+	var Y = 0;
+
+	if (screen.availWidth){
+		X = (screen.availWidth / 2) - (wndWidth / 2);
+		Y = (screen.availHeight / 2) - (wndHeight / 2);
+	}
+
+	if(window.showModalDialog){window.showModalDialog(popupsite, window,
+		  "dialogWidth:" + wndWidth + "px;dialogHeight:" + wndHeight + "px;status:0");}else{
+
+	childwindow = window.open(popupsite,windowname,"left=" + X + "screenX=" + X + "screenY=" + Y + ",top=" + Y + ",toolbar=0,scrollbars=n,resizable=1,height=" + wndHeight + "pt,width=" + wndWidth + "pt");
+	window.onfocus = function(){if (childwindow.closed == false){childwindow.focus();};};
+	}
+}
+</script>
+<title>Consulta por Placa do Veículo</title></head>
+
+<body onload="javascript:document.Formulario.txtPlaca.focus();javascript:document.Formulario.txtPlaca.value='';">
+<!--javascript:OpenModalWindow('../../popup/AVISO_20090618.jpg','', '250', '300')-->
+<!--javascript:OpenModalWindow('../../popup/AVISO_20090120.jpg','', '250', '300')-->
+<div id="geral">
+   <!--<link href="css/estilo.css" rel="stylesheet" type="text/css" />-->
+<link href="css/estilo.css" rel="stylesheet" type="text/css" title="estilo">
+<link href="css/estilo_large.css" rel="stylesheet" type="text/css" title="estilo_large">
+<link href="css/estilo_small.css" rel="stylesheet" type="text/css" title="estilo_small">
+
+
+<!--
+<script src="../../../js/troca_fonte.js" language="javascript" type="text/javascript"></script>
+<noscript>Script que aumenta ou diminui as letras do site</noscript>
+<div id="topoGoverno">
+	<div class="select">
+	<select name="opcoes" onChange="if(options[selectedIndex].value) window.location.href= (options[selectedIndex].value)" class="pr">
+		<option>Destaques do governo</option>
+		<option value="javascript:nova_jan('http://www.brasil.gov.br')">Portal do Governo Federal</option>
+		<option value="javascript:nova_jan('http://www.e.gov.br')">Portal de Servi&ccedil;os do Governo</option>
+		<option value="javascript:nova_jan('http://www.radiobras.gov.br')">Portal da Ag&ecirc;ncia de Not&iacute;cias</option>
+		<option value="javascript:nova_jan('http://www.previdenciasocial.gov.br/reforma')">Reforma da Previd&ecirc;ncia</option>
+		<option value="javascript:nova_jan('http://www.fomezero.gov.br')">Programa Fome Zero</option>
+	</select>
+	</div>
+</div>
+<div id="menuSuperior">
+</div>
+
+	<div id="tudo">
+    
+    	<div class="barraGoverno"></div>
+        <div class="topo"></div>
+        <div class="logoAntt"></div>
+	</div>
+
+-->
+
+    <!--Analytics-->
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script><script src="https://ssl.google-analytics.com/ga.js" type="text/javascript"></script>
+<script type="text/javascript">
+try {
+var pageTracker = _gat._getTracker("UA-5943783-2");
+pageTracker._trackPageview();
+} catch(err) {}</script>
+<!--Analytics-->
+
+   <!-- Início do Centro -->
+   
+   <div id="apresentacaoConcessao">
+   		<div id="fotoCarga"></div>
+		<div class="tituloConcessao" align="center">Consulta aos Veículos Habilitados</div>
+		<div class="textoConcessao" align="justify">Permite visualizar os veículos, nacionais e estrangeiros, habilitados pela ANTT ao transporte rodoviário internacional de cargas.</div>
+		
+<div align="center">
+<!--INÍCIO TABELA -->
+<div class="caixaQuinhentos">
+    <div class="caixaacimaQuinhentos">
+       <div class="caixaabaixoQuinhentos" align="left">
+  <form name="Formulario" id="Formulario" method="post" onsubmit="return valida_form('Formulario')">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" align="center">
+    <tbody><tr>
+      <td bgcolor="#ededed" align="center" class="height"><b>Consulta por Placa do Veículo</b></td>
+    </tr>
+    <tr>
+      <td>
+        <table width="100%" border="0" cellspacing="1" cellpadding="1" align="center">
+          <tbody><tr>
+            <td align="right">Informe a Placa do veículo<br>
+                (utilize somente letras e números):
+            </td>
+            <td>
+              <input type="text" name="txtPlaca" size="12" maxlength="9" class="input" onkeypress="return SoLetraNumero(event);">
+            </td>
+            <td><b><input type="button" class="button" name="cmdConsultaPlaca" value="Consultar" "="" onclick="javascript:Formulario.cmdConsultaPlaca.disabled=true;btnActionClick('PLACA')"></b></td>
+          </tr>
+        </tbody></table>
+	   </td>
+	</tr>
+</tbody></table>
+</form>
+</div></div></div>
+<!--FIM TABELA -->
+</div>
+</div>
+  </div>
+   <!--
+<div id="rodape">
+   <b>ANTT - Agência Nacional de Transportes Terrestres</b><br />
+   Setor Bancário Norte (SBN), Quadra 2, Bloco C | Brasília - DF - CEP 70.040-020 | CNPJ: 04.898.488/0001-77 |   <a href="/faleconosco/faleconosco.asp">Fale Conosco: <b>0800-610300</b></a>
+</div>
+-->
+
+
+
+
+
+
+
+</body></html>
