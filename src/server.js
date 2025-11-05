@@ -23,6 +23,7 @@ app.get('/health', (_req, res) => {
 
 // GET /api/antt-veiculo?placa=XXX0000
 app.get('/api/antt-veiculo', async (req, res) => {
+  const startTime = Date.now();
   try {
     const placaRaw = String(req.query.placa || '').trim();
     if (!placaRaw) {
@@ -37,7 +38,11 @@ app.get('/api/antt-veiculo', async (req, res) => {
     // Retry estrito por padrão, com timeout máximo configurável via env
     process.env.RETRY_STRICT = process.env.RETRY_STRICT ?? 'true';
     process.env.RETRY_TOTAL_TIMEOUT_MS = process.env.RETRY_TOTAL_TIMEOUT_MS ?? '90000';
+    
+    console.log(`[${placa}] ⏳ Iniciando consulta ANTT...`);
     const data = await fetchAnttByPlate(placa);
+    const duration = Date.now() - startTime;
+    console.log(`[${placa}] ✅ Consulta finalizada em ${duration}ms.`);
     
     // Verifica se os dados essenciais estão faltando
     const isDataMissing = !data || (!data.chassi && !data.cnpj);
@@ -65,7 +70,8 @@ app.get('/api/antt-veiculo', async (req, res) => {
       fonte: 'https://scff.antt.gov.br/conPlaca.asp'
     });
   } catch (err) {
-    console.error('Erro na consulta:', err);
+    const duration = Date.now() - startTime;
+    console.error(`[${req.query.placa}] ❌ Erro na consulta após ${duration}ms:`, err.message);
     res.status(500).json({ error: 'Falha ao consultar ANTT. Tente novamente mais tarde.' });
   }
 });
