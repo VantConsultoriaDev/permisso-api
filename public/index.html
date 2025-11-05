@@ -43,8 +43,10 @@
 
         function showLoading(show) {
             loadingMessage.classList.toggle('hidden', !show);
-            resultsContainer.classList.add('hidden');
-            errorMessage.classList.add('hidden');
+            if (show) {
+                resultsContainer.classList.add('hidden');
+                errorMessage.classList.add('hidden');
+            }
         }
 
         function showError(message) {
@@ -73,8 +75,12 @@
             
             showLoading(true);
             try {
+                console.log(`[Frontend] Buscando dados para a placa: ${placa}`);
                 const response = await fetch(`/api/antt-veiculo?placa=${placa}`);
+                console.log('[Frontend] Resposta do servidor recebida:', response);
+
                 const data = await response.json();
+                console.log('[Frontend] Dados (JSON) recebidos:', data);
 
                 if (response.ok) {
                     // Verifica se os dados essenciais estão vazios, indicando 'não cadastrado'
@@ -84,13 +90,11 @@
                         displayResults(data);
                     }
                 } else {
-                    showError(data.error || 'Erro desconhecido ao buscar dados.');
+                    showError(data.error || `Ocorreu um erro no servidor (código: ${response.status}).`);
                 }
             } catch (error) {
-                console.error('Fetch error:', error);
-                showError('Falha na comunicação com o servidor da API.');
-            } finally {
-                showLoading(false);
+                console.error('[Frontend] Erro crítico na requisição:', error);
+                showError('Falha na comunicação com a API. Verifique o console do navegador (F12) para detalhes técnicos.');
             }
         }
 

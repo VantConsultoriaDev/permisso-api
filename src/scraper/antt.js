@@ -239,13 +239,16 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
   
   let browser;
   try {
+    if (process.env.DEBUG_SCRAPER) console.log(`[Puppeteer] 🚀 Lançando navegador para placa ${placa}...`);
     browser = await puppeteerExtra.launch({
       headless,
       userDataDir,
       args
     });
+    if (process.env.DEBUG_SCRAPER) console.log(`[Puppeteer] ✅ Navegador lançado.`);
     
     const page = await browser.newPage();
+    if (process.env.DEBUG_SCRAPER) console.log(`[Puppeteer] ✅ Nova página criada.`);
     
     // Autenticação de proxy (se houver credenciais em PROXY_URL)
     if (proxyUrl) {
@@ -332,7 +335,7 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
     }
     
     // Espera por algum indicador de dados (Dados do Veículo ou Aviso)
-    await page.waitForFunction(() => Array.from(document.querySelectorAll('th, b')).some(el => el.textContent && (el.textContent.includes('Dados do Veículo') || el.textContent.includes('Situação: VEÍCULO NÃO CADASTRADO'))), { timeout: 8000 }).catch(() => {});
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('th, b')).some(el => el.textContent && (el.textContent.includes('Dados do Veículo') || el.textContent.includes('Situação: VEÍCulo NÃO CADASTRADO'))), { timeout: 8000 }).catch(() => {});
 
     // Extrai os dados
     const targetFrame = page.frames().find((f) => {
@@ -409,9 +412,14 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
     
     return anyFallback ? fallbackData : data;
     
+  } catch (err) {
+    console.error(`[Puppeteer] ❌ Erro crítico durante a raspagem para a placa ${placa}:`, err);
+    throw err;
   } finally {
     if (browser) {
+      if (process.env.DEBUG_SCRAPER) console.log(`[Puppeteer] 🔒 Fechando navegador...`);
       await browser.close();
+      if (process.env.DEBUG_SCRAPER) console.log(`[Puppeteer] ✅ Navegador fechado.`);
     }
   }
 }

@@ -35,6 +35,9 @@ app.get('/api/antt-veiculo', async (req, res) => {
       return res.status(400).json({ error: 'Placa inválida. Utilize somente letras e números.' });
     }
 
+    // Forçar modo de depuração para obter logs detalhados do scraper
+    process.env.DEBUG_SCRAPER = 'true';
+    
     // Retry estrito por padrão, com timeout máximo configurável via env
     process.env.RETRY_STRICT = process.env.RETRY_STRICT ?? 'true';
     process.env.RETRY_TOTAL_TIMEOUT_MS = process.env.RETRY_TOTAL_TIMEOUT_MS ?? '90000';
