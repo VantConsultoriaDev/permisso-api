@@ -37,12 +37,13 @@ function getLabelValue($, label) {
     const next = td.next('td');
     if (next.length) return sanitize(next.text());
     const parent = td.parent();
+    // Fallback: look for the second TD in the same row
     const fallback = parent.find('td').eq(1).text();
     if (fallback) return sanitize(fallback);
   }
-  // Fallback: regex search across all text
+  // Fallback: regex search across all text (less reliable)
   const bodyText = $('body').text();
-  const re = new RegExp(`${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\s*:?\s*([^\n\r]+)`, 'i');
+  const re = new RegExp(`${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:?\\s*([^\n\r]+)`, 'i');
   const m = bodyText.match(re);
   return m ? sanitize(m[1]) : null;
 }
@@ -57,8 +58,10 @@ export async function fetchAnttByPlate(placa) {
 
   function isCompleteData(d) {
     if (!d) return false;
-    const reqs = [d.chassi, d.cnpj, d.razaoSocial, d.nomeFantasia, d.enderecoCompleto];
-    return reqs.every((v) => v && String(v).trim().length > 0);
+    // Consider data complete if we have Chassi AND CNPJ/Razão Social
+    const hasVehicle = d.chassi && String(d.chassi).trim().length > 0;
+    const hasCompany = (d.cnpj && String(d.cnpj).trim().length > 0) || (d.razaoSocial && String(d.razaoSocial).trim().length > 0);
+    return hasVehicle && hasCompany;
   }
 
   async function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -89,6 +92,12 @@ export async function fetchAnttByPlate(placa) {
         html = await resp2.text();
       }
       const $ = load(html || '');
+      
+      // Check for "VEÍCULO NÃO CADASTRADO" message
+      if ($('body').text().includes('VEÍCULO NÃO CADASTRADO NA ANTT!')) {
+          return { chassi: null, cnpj: null, razaoSocial: null, nomeFantasia: null, enderecoCompleto: null };
+      }
+      
       const chassi = getLabelValue($, 'Chassi/Motor');
       const cnpj = getLabelValue($, 'CPNJ') || getLabelValue($, 'CNPJ');
       const razaoSocial = getLabelValue($, 'Razão Social') || getLabelValue($, 'Razao Social');
@@ -106,27 +115,31 @@ export async function fetchAnttByPlate(placa) {
     }
   }
 
-  async function attemptPuppeteer(mode = 'headless') {
+  async function attemptPuppeteer() {
+    let browser;
     try {
-      // Força headless sempre para não abrir janelas
       const data = await fetchWithPuppeteer(placa, { headless: 'new' });
       return data;
     } catch (err) {
       lastError = err;
+      // Re-throw specific ANTT error to be handled by the retry loop
+      if (err.message === 'ANTT_SERVER_ERROR_500') {
+        throw err;
+      }
       return null;
     }
   }
 
   const strategies = process.env.PROXY_URL ? [
-    () => attemptPuppeteer('headless'),
-    () => attemptHttp(),
-    () => attemptPuppeteer('headless'),
-    () => attemptHttp(),
+    attemptPuppeteer,
+    attemptHttp,
+    attemptPuppeteer,
+    attemptHttp,
   ] : [
-    () => attemptHttp(),
-    () => attemptPuppeteer('headless'),
-    () => attemptHttp(),
-    () => attemptPuppeteer('headless'),
+    attemptHttp,
+    attemptPuppeteer,
+    attemptHttp,
+    attemptPuppeteer,
   ];
 
   let bestData = { placa };
@@ -134,12 +147,31 @@ export async function fetchAnttByPlate(placa) {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (Date.now() - start > TOTAL_TIMEOUT_MS && !STRICT) break;
     const strat = strategies[(attempt - 1) % strategies.length];
-    const data = await strat();
-    if (isCompleteData(data)) return data;
     
-    // Coleta dados parciais se tiver mais campos que o melhor até agora
-    if (data && Object.keys(data).length > Object.keys(bestData).length) {
-      bestData = { placa, ...data };
+    try {
+        const data = await strat();
+        if (isCompleteData(data)) return { placa, ...data };
+        
+        // Coleta dados parciais se tiver mais campos que o melhor até agora
+        if (data && Object.keys(data).length > Object.keys(bestData).length) {
+          bestData = { placa, ...data };
+        }
+        
+        // Se a placa não está cadastrada, retorna imediatamente
+        if (data && !data.chassi && !data.cnpj && !data.razaoSocial) {
+            return { placa, ...data };
+        }
+        
+    } catch (e) {
+        lastError = e;
+        if (e.message === 'ANTT_SERVER_ERROR_500') {
+            // Se for erro 500, espera um pouco mais e tenta novamente
+            if (process.env.DEBUG_SCRAPER) {
+                console.log('🚨 Site da ANTT indisponível (erro 500). Tentando novamente...');
+            }
+            await sleep(5000);
+            continue; // Pula o delay normal e tenta novamente
+        }
     }
     
     const base = 800;
@@ -150,39 +182,30 @@ export async function fetchAnttByPlate(placa) {
   // If strict, keep trying until timeout cap is reached
   while (Date.now() - start <= TOTAL_TIMEOUT_MS && STRICT) {
     const strat = strategies[Math.floor(Math.random() * strategies.length)];
-    const data = await strat();
-    if (isCompleteData(data)) return data;
     
-    // Coleta dados parciais se tiver mais campos que o melhor até agora
-    if (data && Object.keys(data).length > Object.keys(bestData).length) {
-      bestData = { placa, ...data };
+    try {
+        const data = await strat();
+        if (isCompleteData(data)) return { placa, ...data };
+        
+        if (data && Object.keys(data).length > Object.keys(bestData).length) {
+          bestData = { placa, ...data };
+        }
+        
+        if (data && !data.chassi && !data.cnpj && !data.razaoSocial) {
+            return { placa, ...data };
+        }
+        
+    } catch (e) {
+        lastError = e;
+        if (e.message === 'ANTT_SERVER_ERROR_500') {
+            await sleep(5000);
+            continue;
+        }
     }
     
     await sleep(1500 + Math.floor(Math.random() * 1200));
   }
 
-  // Tentativa final: puppeteer headless mais uma vez
-  let finalData = null;
-  try {
-    finalData = await attemptPuppeteer('headless');
-    if (isCompleteData(finalData)) return finalData;
-  } catch (e) {
-    lastError = e;
-    
-    // Tratamento específico para erro 500 da ANTT
-    if (e.message === 'ANTT_SERVER_ERROR_500') {
-      if (process.env.DEBUG_SCRAPER) {
-        console.log('🚨 Site da ANTT indisponível (erro 500). Tentando novamente em 5 segundos...');
-      }
-      await sleep(5000); // Aguarda 5 segundos antes da próxima tentativa
-    }
-  }
-
-  // Usa os melhores dados coletados ou dados da tentativa final
-  if (finalData && Object.keys(finalData).length > Object.keys(bestData).length) {
-    bestData = { placa, ...finalData };
-  }
-  
   // Log detalhado para debug
   if (process.env.DEBUG_SCRAPER === 'true') {
     console.log('🔍 Debug - Dados extraídos:', JSON.stringify(bestData, null, 2));
@@ -191,7 +214,10 @@ export async function fetchAnttByPlate(placa) {
     console.log('🔍 Debug - Campos ausentes:', missing);
   }
 
-  console.error('Falha ao obter dados completos da ANTT.', lastError || 'Sem erro capturado');
+  if (!isCompleteData(bestData) && lastError) {
+      console.error('Falha ao obter dados completos da ANTT.', lastError.message || 'Sem erro capturado');
+  }
+  
   return bestData;
 }
 
@@ -210,13 +236,17 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
   if (proxyUrl) {
     args.push(`--proxy-server=${proxyUrl}`);
   }
-  const browser = await puppeteerExtra.launch({
-    headless,
-    userDataDir,
-    args
-  });
+  
+  let browser;
   try {
+    browser = await puppeteerExtra.launch({
+      headless,
+      userDataDir,
+      args
+    });
+    
     const page = await browser.newPage();
+    
     // Autenticação de proxy (se houver credenciais em PROXY_URL)
     if (proxyUrl) {
       try {
@@ -229,11 +259,13 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
         }
       } catch {}
     }
+    
     await page.setViewport({ width: 1366, height: 768 });
     await page.setUserAgent(COMMON_HEADERS['User-Agent']);
     await page.setExtraHTTPHeaders({
       'Accept-Language': COMMON_HEADERS['Accept-Language']
     });
+    
     // Intercepta requisições para bloquear analytics/imagens/fontes
     await page.setRequestInterception(true);
     page.on('request', (req) => {
@@ -246,14 +278,18 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
       }
       req.continue();
     });
+    
     // Carrega a página de busca e tenta submeter o formulário
     await page.goto(SEARCH_URL, { waitUntil: 'networkidle0' });
+    
     try {
       await page.waitForSelector('input[name="txtPlaca"]', { timeout: 3000 });
       await page.type('input[name="txtPlaca"]', placa, { delay: 60 });
       const btn = await page.$('input[name="cmdConsultaPlaca"]');
+      
       if (btn) {
         await btn.click();
+        // Espera pela navegação ou timeout
         await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {});
       } else {
         // Fallback: tenta outros seletores
@@ -266,33 +302,39 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
           await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 }).catch(() => {});
         }
       }
-    } catch {
-      // Fallback: acesso direto
+    } catch (e) {
+      // Se falhar ao interagir com o formulário, tenta acesso direto
+      if (process.env.DEBUG_SCRAPER) {
+          console.log('⚠️ Falha na interação com o formulário. Tentando acesso direto...');
+      }
       await page.goto(`${RESULT_URL}?txtPlaca=${encodeURIComponent(placa)}`, { waitUntil: 'networkidle0' });
     }
 
-    // Extrai os dados: lida com páginas que usam frames/iframes// Aguarda a página carregar
-  await page.waitForSelector('body');
-  
-  // Verifica se há erro 500 ou outros erros do servidor
-  const hasServerError = await page.evaluate(() => {
-    const title = document.title || '';
-    const bodyText = document.body ? document.body.textContent : '';
-    return title.includes('500') || 
-           title.includes('Internal server error') ||
-           bodyText.includes('500 - Internal server error') ||
-           bodyText.includes('Server Error') ||
-           bodyText.includes('There is a problem with the resource');
-  });
-  
-  if (hasServerError) {
-    if (process.env.DEBUG_SCRAPER) {
-      console.log('❌ Site da ANTT retornou erro 500 (Internal Server Error)');
+    // Aguarda a página carregar
+    await page.waitForSelector('body');
+    
+    // Verifica se há erro 500 ou outros erros do servidor
+    const hasServerError = await page.evaluate(() => {
+      const title = document.title || '';
+      const bodyText = document.body ? document.body.textContent : '';
+      return title.includes('500') || 
+             title.includes('Internal server error') ||
+             bodyText.includes('500 - Internal server error') ||
+             bodyText.includes('Server Error') ||
+             bodyText.includes('There is a problem with the resource');
+    });
+    
+    if (hasServerError) {
+      if (process.env.DEBUG_SCRAPER) {
+        console.log('❌ Site da ANTT retornou erro 500 (Internal Server Error)');
+      }
+      throw new Error('ANTT_SERVER_ERROR_500');
     }
-    throw new Error('ANTT_SERVER_ERROR_500');
-  }
-  
-  await page.waitForFunction(() => Array.from(document.querySelectorAll('th')).some(th => th.textContent && th.textContent.includes('Dados do Veículo')), { timeout: 8000 }).catch(() => {});
+    
+    // Espera por algum indicador de dados (Dados do Veículo ou Aviso)
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('th, b')).some(el => el.textContent && (el.textContent.includes('Dados do Veículo') || el.textContent.includes('Situação: VEÍCULO NÃO CADASTRADO'))), { timeout: 8000 }).catch(() => {});
+
+    // Extrai os dados
     const targetFrame = page.frames().find((f) => {
       const u = f.url() || '';
       return /conLocalizaVeiculo|mostraVeiculo|resultado/gi.test(u);
@@ -302,19 +344,31 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
       function sanitize(t) { return t ? t.replace(/\s+/g, ' ').trim() : null; }
       function getLabelValue(label) {
         const tds = Array.from(document.querySelectorAll('td'));
+        // Busca a célula que contém o label (case insensitive)
         const td = tds.find((x) => x.textContent && x.textContent.toLowerCase().includes(label.toLowerCase()));
         if (!td) return null;
+        
+        // Tenta pegar o próximo elemento irmão (que deve ser o valor)
         const next = td.nextElementSibling;
         if (next) return sanitize(next.textContent);
+        
+        // Fallback: se o label estiver em negrito dentro de um TD, o valor pode estar no TD seguinte
         const parent = td.parentElement;
         if (parent) {
           const cells = parent.querySelectorAll('td');
-          if (cells[1]) return sanitize(cells[1].textContent);
+          // Se a célula 0 contém o label, a célula 1 deve conter o valor
+          if (cells[0] === td && cells[1]) return sanitize(cells[1].textContent);
         }
         return null;
       }
+      
+      // Verifica se é a página de "VEÍCULO NÃO CADASTRADO"
+      if (document.body.textContent.includes('VEÍCULO NÃO CADASTRADO NA ANTT!')) {
+          return { chassi: null, cnpj: null, razaoSocial: null, nomeFantasia: null, enderecoCompleto: null };
+      }
+      
       const chassi = getLabelValue('Chassi/Motor');
-      const cnpj = getLabelValue('CNPJ');
+      const cnpj = getLabelValue('CNPJ') || getLabelValue('CPNJ');
       const razaoSocial = getLabelValue('Razão Social') || getLabelValue('Razao Social');
       const nomeFantasia = getLabelValue('Nome Fantasia');
       const endereco = getLabelValue('Endereço') || getLabelValue('Endereco');
@@ -324,10 +378,20 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
       const enderecoCompleto = [endereco, bairro, cidade, paisOrigem].filter(Boolean).join(', ');
       return { chassi, cnpj, razaoSocial, nomeFantasia, enderecoCompleto };
     });
-    // Fallback: parse do HTML renderizado
+    
+    // Fallback: parse do HTML renderizado (Cheerio)
     const html = await page.content();
     const $ = load(html || '');
     function s(x){ return x ? x.replace(/\s+/g,' ').trim() : null; }
+    
+    // Verifica se o Puppeteer retornou dados válidos
+    const anyData = data && (data.chassi || data.cnpj || data.razaoSocial || data.nomeFantasia || data.enderecoCompleto);
+    
+    if (anyData) {
+        return data;
+    }
+    
+    // Se o Puppeteer falhou na extração, tenta o Cheerio no HTML final
     const chassiF = (function(){ const td = $('td:contains("Chassi/Motor")').first(); const next = td.next('td'); return s(next.text()); })();
     const cnpjF = (function(){ const td = $('td:contains("CNPJ"), td:contains("CPNJ")').first(); const next = td.next('td'); return s(next.text()); })();
     const razaoF = (function(){ const td = $('td:contains("Razão Social"), td:contains("Razao Social")').first(); const next = td.next('td'); return s(next.text()); })();
@@ -337,10 +401,17 @@ async function fetchWithPuppeteer(placa, { headless = 'new' } = {}) {
     const cidadeF = (function(){ const td = $('td:contains("Cidade")').first(); const next = td.next('td'); return s(next.text()); })();
     const paisF = (function(){ const td = $('td:contains("País de Origem"), td:contains("Pais de Origem")').first(); const next = td.next('td'); return s(next.text()); })();
     const enderecoCompletoF = [enderecoF, bairroF, cidadeF, paisF].filter(Boolean).join(', ');
-    const anyData = data && (data.chassi || data.cnpj || data.razaoSocial || data.nomeFantasia || data.enderecoCompleto);
-    const anyFallback = chassiF || cnpjF || razaoF || fantasiaF || enderecoCompletoF;
-    return anyData ? data : (anyFallback ? { chassi: chassiF, cnpj: cnpjF, razaoSocial: razaoF, nomeFantasia: fantasiaF, enderecoCompleto: enderecoCompletoF } : data);
+    
+    const fallbackData = { chassi: chassiF, cnpj: cnpjF, razaoSocial: razaoF, nomeFantasia: fantasiaF, enderecoCompleto: enderecoCompletoF };
+    
+    // Se o fallback do Cheerio encontrar dados, usa eles.
+    const anyFallback = fallbackData.chassi || fallbackData.cnpj || fallbackData.razaoSocial || fallbackData.nomeFantasia || fallbackData.enderecoCompleto;
+    
+    return anyFallback ? fallbackData : data;
+    
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+    }
   }
 }
