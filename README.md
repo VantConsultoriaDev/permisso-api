@@ -17,10 +17,11 @@ Esta API consulta a página pública da ANTT (`https://scff.antt.gov.br/conPlaca
 3. Verifique saúde:
    - `http://localhost:3000/health`
 
-## Endpoint
+## Endpoints
 
 - Método: `GET`
-- URL: `http://localhost:3000/api/antt-veiculo?placa=ABC1D23`
+- **Consulta por Query Parameter:** `http://localhost:3000/api/antt-veiculo?placa=ABC1D23`
+- **Consulta por Path Parameter:** `http://localhost:3000/api/antt-veiculo/ABC1D23`
 - Parâmetros:
   - `placa`: string, somente letras e números (maiúsculas/minúsculas aceitas)
 

@@ -21,11 +21,10 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/antt-veiculo?placa=XXX0000
-app.get('/api/antt-veiculo', async (req, res) => {
+// Reusable function to handle ANTT query logic
+async function handleAnttQuery(placaRaw, res) {
   const startTime = Date.now();
   try {
-    const placaRaw = String(req.query.placa || '').trim();
     if (!placaRaw) {
       return res.status(400).json({ error: 'Parâmetro "placa" é obrigatório.' });
     }
@@ -75,9 +74,19 @@ app.get('/api/antt-veiculo', async (req, res) => {
     });
   } catch (err) {
     const duration = Date.now() - startTime;
-    console.error(`[${req.query.placa}] ❌ Erro na consulta após ${duration}ms:`, err.message);
+    console.error(`[${placaRaw}] ❌ Erro na consulta após ${duration}ms:`, err.message);
     res.status(500).json({ error: 'Falha ao consultar ANTT. Tente novamente mais tarde.' });
   }
+}
+
+// GET /api/antt-veiculo?placa=XXX0000 (Existing route using query parameter)
+app.get('/api/antt-veiculo', async (req, res) => {
+  await handleAnttQuery(req.query.placa, res);
+});
+
+// GET /api/antt-veiculo/:placa (New route using path parameter)
+app.get('/api/antt-veiculo/:placa', async (req, res) => {
+  await handleAnttQuery(req.params.placa, res);
 });
 
 const PORT = process.env.PORT || 3000;
