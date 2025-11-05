@@ -1,7 +1,20 @@
 import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { fetchAnttByPlate } from './scraper/antt.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
+
+// Serve static files from the 'public' directory
+app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// Root route serves the index.html
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
 
 // Healthcheck
 app.get('/health', (_req, res) => {
@@ -25,8 +38,21 @@ app.get('/api/antt-veiculo', async (req, res) => {
     process.env.RETRY_STRICT = process.env.RETRY_STRICT ?? 'true';
     process.env.RETRY_TOTAL_TIMEOUT_MS = process.env.RETRY_TOTAL_TIMEOUT_MS ?? '90000';
     const data = await fetchAnttByPlate(placa);
-    if (!data) {
-      return res.status(404).json({ error: 'Veículo não encontrado ou página indisponível.' });
+    
+    // Verifica se os dados essenciais estão faltando
+    const isDataMissing = !data || (!data.chassi && !data.cnpj);
+
+    if (isDataMissing) {
+      // Retorna 200 OK, mas com campos nulos, indicando que a placa não foi encontrada ou dados estão incompletos.
+      return res.json({
+        placa,
+        chassi: null,
+        cnpj: null,
+        razaoSocial: null,
+        nomeFantasia: null,
+        endereco: null,
+        fonte: 'https://scff.antt.gov.br/conPlaca.asp'
+      });
     }
 
     return res.json({
@@ -40,7 +66,7 @@ app.get('/api/antt-veiculo', async (req, res) => {
     });
   } catch (err) {
     console.error('Erro na consulta:', err);
-    res.status(500).json({ error: 'Falha ao consultar ANTT.' });
+    res.status(500).json({ error: 'Falha ao consultar ANTT. Tente novamente mais tarde.' });
   }
 });
 

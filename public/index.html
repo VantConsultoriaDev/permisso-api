@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consulta ANTT - Veículo</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Consulta ANTT por Placa</h1>
+        
+        <div class="input-group">
+            <label for="placaInput">Placa do Veículo (7 caracteres):</label>
+            <input type="text" id="placaInput" maxlength="7" placeholder="ABC1234" autofocus>
+        </div>
+
+        <div id="loadingMessage" class="loading hidden">
+            Buscando dados na ANTT... (Pode levar até 90 segundos)
+        </div>
+
+        <div id="errorMessage" class="error hidden">
+            
+        </div>
+
+        <div id="resultsContainer" class="results hidden">
+            <h2>Dados do Veículo</h2>
+            <p><strong>Placa:</strong> <span id="resultPlaca"></span></p>
+            <p><strong>Chassi:</strong> <span id="resultChassi"></span></p>
+            <p><strong>CNPJ:</strong> <span id="resultCnpj"></span></p>
+            <p><strong>Razão Social:</strong> <span id="resultRazaoSocial"></span></p>
+            <p><strong>Nome Fantasia:</strong> <span id="resultNomeFantasia"></span></p>
+            <p><strong>Endereço:</strong> <span id="resultEndereco"></span></p>
+            <p><strong>Fonte:</strong> <span id="resultFonte"></span></p>
+        </div>
+    </div>
+
+    <script>
+        const placaInput = document.getElementById('placaInput');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const resultsContainer = document.getElementById('resultsContainer');
+
+        function showLoading(show) {
+            loadingMessage.classList.toggle('hidden', !show);
+            resultsContainer.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+        }
+
+        function showError(message) {
+            errorMessage.innerHTML = `<strong>Erro:</strong> ${message}`;
+            errorMessage.classList.remove('hidden');
+            loadingMessage.classList.add('hidden');
+            resultsContainer.classList.add('hidden');
+        }
+
+        function displayResults(data) {
+            document.getElementById('resultPlaca').textContent = data.placa || 'N/A';
+            document.getElementById('resultChassi').textContent = data.chassi || 'N/A';
+            document.getElementById('resultCnpj').textContent = data.cnpj || 'N/A';
+            document.getElementById('resultRazaoSocial').textContent = data.razaoSocial || 'N/A';
+            document.getElementById('resultNomeFantasia').textContent = data.nomeFantasia || 'N/A';
+            document.getElementById('resultEndereco').textContent = data.endereco || 'N/A';
+            document.getElementById('resultFonte').textContent = data.fonte || 'N/A';
+            
+            resultsContainer.classList.remove('hidden');
+            loadingMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+        }
+
+        async function fetchPlateData(placa) {
+            if (placa.length < 7) return;
+            
+            showLoading(true);
+            try {
+                const response = await fetch(`/api/antt-veiculo?placa=${placa}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Verifica se os dados essenciais estão vazios, indicando 'não cadastrado'
+                    if (!data.chassi && !data.cnpj) {
+                        showError(`Veículo com placa ${placa} não cadastrado na ANTT ou dados incompletos.`);
+                    } else {
+                        displayResults(data);
+                    }
+                } else {
+                    showError(data.error || 'Erro desconhecido ao buscar dados.');
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                showError('Falha na comunicação com o servidor da API.');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        placaInput.addEventListener('input', (e) => {
+            // Limpa caracteres não alfanuméricos e converte para maiúsculas
+            let placa = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            e.target.value = placa;
+
+            if (placa.length === 7) {
+                fetchPlateData(placa);
+            } else {
+                // Limpa resultados se a placa for incompleta
+                resultsContainer.classList.add('hidden');
+                errorMessage.classList.add('hidden');
+            }
+        });
+        
+        // Permite submeter com Enter
+        placaInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.target.value.length >= 6) {
+                e.preventDefault();
+                fetchPlateData(e.target.value);
+            }
+        });
+    </script>
+</body>
+</html>
