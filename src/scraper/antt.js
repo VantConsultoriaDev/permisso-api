@@ -3,6 +3,7 @@ import path from 'path';
 import puppeteer from 'puppeteer';
 import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { TextDecoder } from 'util'; // Import TextDecoder
 puppeteerExtra.use(StealthPlugin());
 
 const SEARCH_URL = 'https://scff.antt.gov.br/conPlaca.asp';
@@ -74,6 +75,14 @@ export async function fetchAnttByPlate(placa) {
       let resp2 = await fetch(getUrl, {
         headers: { ...COMMON_HEADERS, Referer: SEARCH_URL, Cookie: cookies }
       });
+      
+      // Helper to decode with correct encoding
+      const decodeResponse = async (response) => {
+        const buffer = await response.arrayBuffer();
+        const decoder = new TextDecoder('iso-8859-1'); // Use iso-8859-1
+        return decoder.decode(buffer);
+      };
+
       let html;
       if (resp2.status >= 400) {
         const form = new URLSearchParams({ txtPlaca: placa });
@@ -87,9 +96,9 @@ export async function fetchAnttByPlate(placa) {
           },
           body: form.toString()
         });
-        html = await resp3.text();
+        html = await decodeResponse(resp3);
       } else {
-        html = await resp2.text();
+        html = await decodeResponse(resp2);
       }
       const $ = load(html || '');
       
