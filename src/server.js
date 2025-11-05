@@ -31,8 +31,11 @@ app.get('/api/antt-veiculo', async (req, res) => {
     }
 
     const placa = placaRaw.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (placa.length < 6 || placa.length > 8) {
-      return res.status(400).json({ error: 'Placa inválida. Utilize somente letras e números.' });
+    
+    // Valida o formato da placa (padrão Mercosul e tradicional)
+    const placaRegex = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+    if (!placaRegex.test(placa)) {
+      return res.status(400).json({ error: 'Formato de placa inválido. O formato esperado é ABC1D23.' });
     }
 
     // Forçar modo de depuração para obter logs detalhados do scraper
@@ -47,11 +50,9 @@ app.get('/api/antt-veiculo', async (req, res) => {
     const duration = Date.now() - startTime;
     console.log(`[${placa}] ✅ Consulta finalizada em ${duration}ms.`);
     
-    // Verifica se os dados essenciais estão faltando
     const isDataMissing = !data || (!data.chassi && !data.cnpj);
 
     if (isDataMissing) {
-      // Retorna 200 OK, mas com campos nulos, indicando que a placa não foi encontrada ou dados estão incompletos.
       return res.json({
         placa,
         chassi: null,
