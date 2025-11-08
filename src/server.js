@@ -84,8 +84,13 @@ app.get('/api/antt-veiculo', async (req, res) => {
   await handleAnttQuery(req.query.placa, res);
 });
 
-// GET /api/antt-veiculo/:placa (New route using path parameter)
+// GET /api/antt-veiculo/:placa (Existing route using path parameter)
 app.get('/api/antt-veiculo/:placa', async (req, res) => {
+  await handleAnttQuery(req.params.placa, res);
+});
+
+// GET /api/:placa (New, simplified route using path parameter)
+app.get('/api/:placa', async (req, res) => {
   await handleAnttQuery(req.params.placa, res);
 });
 
